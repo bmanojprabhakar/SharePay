@@ -87,7 +87,6 @@ export default function GroupsPage() {
         setGroups(groupsData);
         setLoading(false);
     }, (error) => {
-        console.error("Error fetching groups: ", error);
         toast({
             variant: 'destructive',
             title: 'Error fetching data',

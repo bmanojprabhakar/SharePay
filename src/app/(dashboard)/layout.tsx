@@ -50,14 +50,6 @@ export default function DashboardLayout({
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log('Dashboard layout - User authenticated:', {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          emailVerified: user.emailVerified,
-          providerData: user.providerData
-        });
         
         // Check if email is verified (unless in development mode)
         const shouldSkipVerification = AUTH_CONFIG.shouldSkipVerification(user.email || '');

@@ -34,7 +34,6 @@ export default function VerifyEmailPage() {
       
       // If user is already verified, create user document and redirect
       if (user.emailVerified) {
-        console.log('✅ User already verified, checking for user document...');
         
         // Get pending user data from localStorage
         const pendingUserDataStr = localStorage.getItem('pendingUserData');
@@ -57,10 +56,8 @@ export default function VerifyEmailPage() {
             
             // Clear pending data
             localStorage.removeItem('pendingUserData');
-            console.log('✅ User document created automatically and pending data cleared');
             
           } catch (error) {
-            console.error('Error creating user document automatically:', error);
           }
         }
         
@@ -114,7 +111,6 @@ export default function VerifyEmailPage() {
     await user.reload();
     
     if (user.emailVerified) {
-      console.log('✅ Email verified! Creating user document in Firestore...');
       
       // Get pending user data from localStorage
       const pendingUserDataStr = localStorage.getItem('pendingUserData');
@@ -137,14 +133,11 @@ export default function VerifyEmailPage() {
           
           // Clear pending data
           localStorage.removeItem('pendingUserData');
-          console.log('✅ User document created in Firestore and pending data cleared');
           
         } catch (error) {
-          console.error('Error creating user document:', error);
           // Continue anyway - user is verified
         }
       } else {
-        console.log('ℹ️ No pending user data found, user document may already exist');
       }
       
       toast({
@@ -165,12 +158,10 @@ export default function VerifyEmailPage() {
     try {
       // Clear any pending user data since user is giving up on verification
       localStorage.removeItem('pendingUserData');
-      console.log('🗑️ Cleared pending user data on sign out');
       
       await signOut(auth);
       router.push('/login');
     } catch (error) {
-      console.error('Error signing out:', error);
     }
   };
 

@@ -150,7 +150,6 @@ export default function CreateGroupPage() {
       });
       router.push('/groups');
     } catch (error: any) {
-      console.error("Error creating group:", error);
       toast({
         variant: 'destructive',
         title: 'Uh oh! Something went wrong.',

@@ -156,7 +156,7 @@ export default function DashboardPage() {
                 details[email] = { name: userData.name };
               }
             } catch (error) {
-              console.error(`Error fetching details for ${email}:`, error);
+              // Error handled silently
             }
           }));
           setAllUserDetails(details);
@@ -171,7 +171,7 @@ export default function DashboardPage() {
         fetchAllUserDetails();
 
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
+        // Error handled silently
       } finally {
         setLoadingData(false);
       }

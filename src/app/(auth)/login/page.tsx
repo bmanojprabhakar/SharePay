@@ -106,12 +106,6 @@ export default function LoginPage() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       
-      console.log('Google sign-in result:', {
-        displayName: user.displayName,
-        email: user.email,
-        photoURL: user.photoURL,
-        emailVerified: user.emailVerified
-      });
       
       // Google accounts are automatically verified
       // But check just in case

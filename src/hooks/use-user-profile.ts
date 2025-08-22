@@ -55,7 +55,6 @@ export function useUserProfile(user: User | null) {
         setError(null);
       },
       (err) => {
-        console.error('Error fetching user profile:', err);
         setError(err.message);
         setLoading(false);
       }

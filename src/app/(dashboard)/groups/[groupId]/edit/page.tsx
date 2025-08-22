@@ -88,7 +88,7 @@ export default function EditGroupPage() {
                 details[email] = { name: userData.name };
               }
             } catch (error) {
-              console.error(`Error fetching details for ${email}:`, error);
+              // Error handled silently
             }
           }));
           setMemberDetails(details);
@@ -226,7 +226,6 @@ export default function EditGroupPage() {
       });
       router.push(`/groups/${groupId}`);
     } catch (error: any) {
-      console.error('Error updating group name:', error);
       toast({
         variant: 'destructive',
         title: getErrorTitle('group'),

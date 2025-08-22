@@ -103,25 +103,11 @@ export function UserAvatar({ user, size = 'md', className, fallbackClassName }: 
   
   // For Google users, ensure we have the high-quality photo URL
   let photoURL = user.photoURL;
-  if (photoURL) {
-    console.log('Original photoURL:', photoURL);
-    if (photoURL.includes('googleusercontent.com')) {
-      // Remove size restrictions for better quality
-      photoURL = photoURL.replace(/=s\d+-c/, '=s400-c');
-      // Also handle other common size patterns
-      photoURL = photoURL.replace(/=s\d+/, '=s400');
-      console.log('Enhanced photoURL:', photoURL);
-    }
-  } else {
-    console.log('No photoURL found for user:', user.email);
-  }
-
-  // Debug: Test if URL is accessible
-  if (photoURL) {
-    const testImage = new Image();
-    testImage.onload = () => console.log('🟢 Direct image test SUCCESS:', photoURL);
-    testImage.onerror = (e) => console.error('🔴 Direct image test FAILED:', photoURL, e);
-    testImage.src = photoURL;
+  if (photoURL && photoURL.includes('googleusercontent.com')) {
+    // Remove size restrictions for better quality
+    photoURL = photoURL.replace(/=s\d+-c/, '=s400-c');
+    // Also handle other common size patterns
+    photoURL = photoURL.replace(/=s\d+/, '=s400');
   }
 
   return (
@@ -138,11 +124,9 @@ export function UserAvatar({ user, size = 'md', className, fallbackClassName }: 
           alt={user.displayName || user.email || 'User avatar'}
           className="h-full w-full object-cover"
           onLoad={(e) => {
-            console.log('✅ Direct img loaded successfully:', photoURL);
             e.currentTarget.style.display = 'block';
           }}
           onError={(e) => {
-            console.error('❌ Direct img failed to load:', photoURL);
             e.currentTarget.style.display = 'none';
             // Show fallback
             const fallback = e.currentTarget.nextElementSibling as HTMLElement;

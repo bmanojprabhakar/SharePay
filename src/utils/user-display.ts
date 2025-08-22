@@ -26,7 +26,6 @@ export async function getUserDisplayNameFromEmail(email: string): Promise<string
     userNameCache[email] = emailUsername;
     return emailUsername;
   } catch (error) {
-    console.error('Error fetching user name:', error);
     // Fallback to email username
     const emailUsername = email.split('@')[0];
     userNameCache[email] = emailUsername;

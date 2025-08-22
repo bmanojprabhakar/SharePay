@@ -206,7 +206,7 @@ export function AddExpenseDialog({
 
     if (splitType === 'equal' && splitBetween.length > 0 && amount > 0) {
       const share = amount / splitBetween.length;
-      const updatedDetails = form.getValues('unequalSplitDetails').map(detail => ({
+      const updatedDetails = (form.getValues('unequalSplitDetails') || []).map(detail => ({
         ...detail,
         amount: splitBetween.includes(detail.email) ? share : 0,
       }));

@@ -77,7 +77,6 @@ export default function CreateGroupPage() {
       });
       router.push(`/groups/${newGroupRef.id}/edit`);
     } catch (error: any) {
-      console.error("Error creating group:", error);
       toast({
         variant: 'destructive',
         title: 'Uh oh! Something went wrong.',

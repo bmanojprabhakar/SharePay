@@ -114,37 +114,25 @@ function RegisterPageContent() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      console.log('🔄 Starting registration process for:', values.email);
       
       // Skip mobile check during registration - we'll handle duplicates after auth
       // Mobile number uniqueness will be enforced by Firestore unique constraints if needed
 
-      console.log('🔐 Creating user with email and password...');
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         values.email,
         values.password
       );
       const user = userCredential.user;
-      console.log('✅ User created successfully:', user.uid);
 
       const shouldSkipVerification = forceEmailVerification ? false : AUTH_CONFIG.shouldSkipVerification(values.email);
 
       // Send email verification only if not in development mode
       if (!shouldSkipVerification) {
-        console.log('📧 Sending email verification...');
-        console.log('User object:', user);
-        console.log('User email:', user.email);
-        console.log('User emailVerified:', user.emailVerified);
         
         try {
           await sendEmailVerification(user);
-          console.log('✅ Email verification sent successfully');
-          console.log('📧 Check your email (including spam folder) for the verification link');
         } catch (emailError: any) {
-          console.error('❌ Failed to send email verification:', emailError);
-          console.error('Email error code:', emailError.code);
-          console.error('Email error message:', emailError.message);
           
           // Show user-friendly error
           toast({
@@ -165,10 +153,8 @@ function RegisterPageContent() {
           registeredAt: new Date().toISOString(),
         };
         localStorage.setItem('pendingUserData', JSON.stringify(pendingUserData));
-        console.log('💾 User data stored temporarily until email verification');
       } else {
         // For development mode, create user document immediately
-        console.log('📄 Creating user document in Firestore (dev mode)...');
         await setDoc(doc(db, 'users', user.uid), {
           name: values.name,
           email: values.email,
@@ -179,16 +165,10 @@ function RegisterPageContent() {
           invitedBy: inviteInfo?.from || null,
           inviteCode: inviteInfo?.code || null,
         });
-        console.log('✅ User document created in Firestore');
       }
 
       // Log invite acceptance (optional - for analytics)
       if (inviteInfo) {
-        console.log('User registered via invite:', {
-          newUser: values.email,
-          invitedBy: inviteInfo.from,
-          inviteCode: inviteInfo.code
-        });
         // In a production app, you might want to:
         // - Send a notification to the inviter
         // - Track referral analytics
@@ -214,9 +194,6 @@ function RegisterPageContent() {
       }
 
     } catch (error: any) {
-      console.error('❌ Registration error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
       
       let errorMessage = error.message;
       let toastTitle = 'Registration failed';

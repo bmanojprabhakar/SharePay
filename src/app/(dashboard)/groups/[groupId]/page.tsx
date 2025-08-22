@@ -46,6 +46,8 @@ import { addDoc, collection as firestoreCollection } from 'firebase/firestore';
 interface Member {
     id: string;
     email?: string;
+    name?: string;
+    displayName?: string;
     photoURL?: string;
 }
 
@@ -104,7 +106,6 @@ export default function GroupDetailPage() {
         description: `Successfully imported ${firestoreExpenses.length} expense${firestoreExpenses.length !== 1 ? 's' : ''}.`,
       });
     } catch (error) {
-      console.error('Error importing expenses:', error);
       toast({
         variant: 'destructive',
         title: 'Import failed',
@@ -120,7 +121,7 @@ export default function GroupDetailPage() {
     const groupDocRef = doc(db, 'groups', groupId);
     const unsubscribeGroup = onSnapshot(groupDocRef, (docSnap) => {
       if (docSnap.exists()) {
-        const groupData = { id: docSnap.id, ...docSnap.data() };
+        const groupData = { id: docSnap.id, ...docSnap.data() } as any;
         if (!groupData.members?.includes(user.uid)) {
           toast({ variant: 'destructive', title: 'Unauthorized', description: 'You are not a member of this group.' });
           router.push('/groups');
@@ -142,25 +143,24 @@ export default function GroupDetailPage() {
                   return {
                     id: email,
                     email: email,
-                    name: userData.name || null,
-                    displayName: userData.name || null, // For UserAvatar compatibility
+                    name: userData.name || undefined,
+                    displayName: userData.name || undefined, // For UserAvatar compatibility
                   };
                 } else {
                   // Fallback for users without documents
                   return {
                     id: email,
                     email: email,
-                    name: null,
-                    displayName: null,
+                    name: undefined,
+                    displayName: undefined,
                   };
                 }
               } catch (error) {
-                console.error(`Error fetching user data for ${email}:`, error);
                 return {
                   id: email,
                   email: email,
-                  name: null,
-                  displayName: null,
+                  name: undefined,
+                  displayName: undefined,
                 };
               }
             })
@@ -175,7 +175,6 @@ export default function GroupDetailPage() {
       }
       setLoading(false);
     }, (error) => {
-        console.error("Error listening to group changes:", error);
         toast({ variant: 'destructive', title: 'Error', description: 'Could not load group data.' });
         setLoading(false);
         router.push('/groups');
@@ -186,7 +185,7 @@ export default function GroupDetailPage() {
         const expensesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
         setExpenses(expensesData);
     }, (error) => {
-        console.error("Error listening to expenses:", error);
+        // Error handled silently
     });
 
     return () => {
@@ -248,7 +247,7 @@ export default function GroupDetailPage() {
             return 'You';
         } else {
             const memberData = members.find(m => m.email === payerEmail);
-            return memberData?.name || payerEmail.split('@')[0];
+            return memberData?.name || memberData?.email?.split('@')[0] || payerEmail.split('@')[0];
         }
     }
     return `${payerEmails.length} people`;
@@ -448,7 +447,7 @@ export default function GroupDetailPage() {
                             <li key={member.id} className="flex items-center gap-3">
                                 <UserAvatar user={member} size="md" className="h-9 w-9" />
                                 <span className="font-medium text-sm">
-                                  {member.email === user?.email ? 'You' : (member.name || member.email.split('@')[0])}
+                                  {member.email === user?.email ? 'You' : (member.name || member.email?.split('@')[0] || 'Unknown')}
                                 </span>
                             </li>
                         ))}
