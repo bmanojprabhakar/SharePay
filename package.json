@@ -3,18 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/web",
+    "packages/shared"
   ],
   "scripts": {
     "dev:web": "npm run dev --workspace=@sharepay/web",
-    "dev:mobile": "npm run start --workspace=@sharepay/mobile",
+    "dev:mobile": "cd packages/mobile && npm start",
     "build:web": "npm run build --workspace=@sharepay/web",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "npm run lint --workspace=@sharepay/web",
     "clean": "rm -rf node_modules packages/*/node_modules",
-    "install:all": "npm install && npm install --workspaces"
+    "install:all": "npm install && npm install --workspaces && cd packages/mobile && npm install"
   },
   "devDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@expo/cli": "^0.24.21"
   }
 }

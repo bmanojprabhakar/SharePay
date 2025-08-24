@@ -1,47 +1,64 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '@sharepay/shared';
+import { NavigationContainer } from '@react-navigation/native';
+import { useAuth } from './src/hooks/useAuth';
+import SplashScreen from './src/components/SplashScreen';
+import AppNavigator from './src/navigation/AppNavigator';
+import AuthNavigator from './src/navigation/AuthNavigator';
+import { AlertProvider } from './src/components/AlertProvider';
+import * as ExpoSplashScreen from 'expo-splash-screen';
+
+// Keep the splash screen visible while we fetch resources
+ExpoSplashScreen.preventAutoHideAsync();
 
 export default function App() {
+  const [isReady, setIsReady] = useState(false);
+  const [splashComplete, setSplashComplete] = useState(false);
   const { user, loading } = useAuth();
 
-  if (loading) {
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        // Hide native splash immediately
+        await ExpoSplashScreen.hideAsync();
+        
+        // Wait for a minimum time and auth to load
+        await new Promise(resolve => {
+          const timer = setTimeout(resolve, 2500); // Minimum splash time
+          if (!loading) clearTimeout(timer);
+          return timer;
+        });
+        
+        setIsReady(true);
+      } catch (error) {
+        console.error('App initialization error:', error);
+        setIsReady(true);
+      }
+    };
+
+    initializeApp();
+  }, [loading]);
+
+  const handleSplashFinish = () => {
+    setSplashComplete(true);
+  };
+
+  // Show splash screen until both ready and animation complete
+  if (!isReady || !splashComplete) {
     return (
-      <View style={styles.container}>
-        <Text>Loading SharePay...</Text>
-        <StatusBar style="auto" />
-      </View>
+      <>
+        <SplashScreen onFinish={handleSplashFinish} />
+        <StatusBar style="light" />
+      </>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>SharePay Mobile</Text>
-      <Text style={styles.subtitle}>
-        {user ? `Welcome, ${user.email}!` : 'Please log in'}
-      </Text>
-      <StatusBar style="auto" />
-    </View>
+    <AlertProvider>
+      <NavigationContainer>
+        <StatusBar style="dark" backgroundColor="#F8FAFC" />
+        {user ? <AppNavigator /> : <AuthNavigator />}
+      </NavigationContainer>
+    </AlertProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-});
