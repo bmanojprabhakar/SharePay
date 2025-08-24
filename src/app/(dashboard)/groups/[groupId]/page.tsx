@@ -18,7 +18,7 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
-import { Plus, Users, ArrowLeft, MoreVertical, Edit, Trash2, FileText, MessageSquare } from 'lucide-react';
+import { Plus, Users, ArrowLeft, MoreVertical, Edit, Trash2, FileText, MessageSquare, ChevronDown, ChevronUp, BarChart3, TrendingUp, Crown, Search } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getCategoryByValue } from '@/lib/expense-categories';
 import { AddExpenseDialog } from '@/components/add-expense-dialog';
@@ -42,6 +42,19 @@ import { useToast } from '@/hooks/use-toast';
 import { SettleUpDialog } from '@/components/settle-up-dialog';
 import { ImportExportDialog } from '@/components/import-export-dialog';
 import { addDoc, collection as firestoreCollection } from 'firebase/firestore';
+import { format, parseISO, isValid } from 'date-fns';
+import { formatAmount } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 interface Member {
     id: string;
@@ -57,6 +70,7 @@ interface Expense {
     amount: number;
     category?: string;
     notes?: string;
+    expenseDate?: string;
     payers: { [email: string]: number };
     splitBetween: string[];
     splitType: 'equal' | 'unequal' | 'payment';
@@ -86,6 +100,11 @@ export default function GroupDetailPage() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{type: 'group' | 'expense', id: string, name: string} | null>(null);
+  const [memberDisplayMode, setMemberDisplayMode] = useState<'spent' | 'incurred'>('incurred');
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [expenseSearchTerm, setExpenseSearchTerm] = useState('');
+  const [currentExpensePage, setCurrentExpensePage] = useState(1);
+  const expensesPerPage = 10;
   const { toast } = useToast();
 
   // Import handler for CSV expenses
@@ -220,7 +239,7 @@ export default function GroupDetailPage() {
 
         if (amountYouPaid > userShare) {
             totalOwedToYou += amountYouPaid - userShare;
-        } else {
+        } else if (userShare > amountYouPaid) {
             totalYouOwe += userShare - amountYouPaid;
         }
     });
@@ -236,6 +255,265 @@ export default function GroupDetailPage() {
   const isSettleUpDisabled = useMemo(() => {
     return Math.abs(groupBalances.netBalance) < 0.01 && groupBalances.youAreOwed < 0.01 && groupBalances.youOwe < 0.01;
   }, [groupBalances]);
+
+  const groupedExpenses = useMemo(() => {
+    const groups: { [key: string]: Expense[] } = {};
+    
+    // Filter expenses based on search term
+    const filteredExpenses = expenses.filter(expense => {
+      if (!expenseSearchTerm.trim()) return true;
+      
+      const searchLower = expenseSearchTerm.toLowerCase();
+      const categoryInfo = getCategoryByValue(expense.category || 'others');
+      
+      return (
+        expense.description.toLowerCase().includes(searchLower) ||
+        expense.notes?.toLowerCase().includes(searchLower) ||
+        categoryInfo.label.toLowerCase().includes(searchLower) ||
+        expense.amount.toString().includes(expenseSearchTerm)
+      );
+    });
+    
+    filteredExpenses.forEach(expense => {
+      let dateKey: string;
+      
+      // Only use expenseDate if it exists and is valid
+      if (expense.expenseDate && expense.expenseDate.trim() !== '') {
+        try {
+          const parsedDate = parseISO(expense.expenseDate);
+          if (isValid(parsedDate)) {
+            dateKey = format(parsedDate, 'yyyy-MM-dd');
+          } else {
+            dateKey = 'Unknown Date';
+          }
+        } catch {
+          dateKey = 'Unknown Date';
+        }
+      } 
+      // Otherwise, put in Unknown Date group
+      else {
+        dateKey = 'Unknown Date';
+      }
+      
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(expense);
+    });
+    
+    // Sort dates in descending order, with "Unknown Date" at the end
+    const sortedDates = Object.keys(groups).sort((a, b) => {
+      if (a === 'Unknown Date') return 1;
+      if (b === 'Unknown Date') return -1;
+      return b.localeCompare(a);
+    });
+    
+    return sortedDates.map(date => ({
+      date,
+      displayDate: date === 'Unknown Date' ? 'Unknown Date' : format(parseISO(date), 'MMMM dd, yyyy'),
+      expenses: groups[date]
+    }));
+  }, [expenses, expenseSearchTerm]);
+
+  // Flatten grouped expenses for pagination
+  const allFilteredExpenses = useMemo(() => {
+    return groupedExpenses.flatMap(group => 
+      group.expenses.map(expense => ({
+        ...expense,
+        dateGroup: group.date,
+        displayDate: group.displayDate
+      }))
+    );
+  }, [groupedExpenses]);
+
+  // Pagination logic for expenses
+  const totalExpensePages = Math.ceil(allFilteredExpenses.length / expensesPerPage);
+  const startExpenseIndex = (currentExpensePage - 1) * expensesPerPage;
+  const endExpenseIndex = startExpenseIndex + expensesPerPage;
+  const currentPageExpenses = allFilteredExpenses.slice(startExpenseIndex, endExpenseIndex);
+
+  // Regroup paginated expenses by date
+  const paginatedGroupedExpenses = useMemo(() => {
+    const groups: { [key: string]: { date: string; displayDate: string; expenses: any[] } } = {};
+    
+    currentPageExpenses.forEach(expense => {
+      if (!groups[expense.dateGroup]) {
+        groups[expense.dateGroup] = {
+          date: expense.dateGroup,
+          displayDate: expense.displayDate,
+          expenses: []
+        };
+      }
+      groups[expense.dateGroup].expenses.push(expense);
+    });
+    
+    // Sort dates in descending order, with "Unknown Date" at the end
+    const sortedDates = Object.keys(groups).sort((a, b) => {
+      if (a === 'Unknown Date') return 1;
+      if (b === 'Unknown Date') return -1;
+      return b.localeCompare(a);
+    });
+    
+    return sortedDates.map(date => groups[date]);
+  }, [currentPageExpenses]);
+
+  const handleExpensePageChange = (page: number) => {
+    setCurrentExpensePage(page);
+  };
+
+  const memberExpenditures = useMemo(() => {
+    const expenditures: { [email: string]: number } = {};
+    
+    // Initialize all members with 0
+    members.forEach(member => {
+      if (member.email) {
+        expenditures[member.email] = 0;
+      }
+    });
+    
+    // Calculate expenditures for each member (what they spent)
+    expenses.forEach(expense => {
+      // Only count actual expenses, not payments
+      if (expense.splitType !== 'payment' && expense.payers) {
+        Object.entries(expense.payers).forEach(([email, amount]) => {
+          if (expenditures.hasOwnProperty(email)) {
+            expenditures[email] += amount;
+          }
+        });
+      }
+    });
+    
+    return expenditures;
+  }, [expenses, members]);
+
+  const memberIncurredExpenses = useMemo(() => {
+    const incurred: { [email: string]: number } = {};
+    
+    // Initialize all members with 0
+    members.forEach(member => {
+      if (member.email) {
+        incurred[member.email] = 0;
+      }
+    });
+    
+    // Calculate incurred expenses for each member (their share of expenses)
+    expenses.forEach(expense => {
+      // Only count actual expenses, not payments
+      if (expense.splitType !== 'payment') {
+        expense.splitBetween.forEach(email => {
+          if (incurred.hasOwnProperty(email)) {
+            let memberShare = 0;
+            
+            if (expense.splitType === 'equal') {
+              memberShare = expense.amount / expense.splitBetween.length;
+            } else if (expense.splitType === 'unequal' && expense.splitDetails) {
+              memberShare = expense.splitDetails[email] || 0;
+            }
+            
+            incurred[email] += memberShare;
+          }
+        });
+      }
+    });
+    
+    return incurred;
+  }, [expenses, members]);
+
+  const groupAnalytics = useMemo(() => {
+    const actualExpenses = expenses.filter(e => e.splitType !== 'payment');
+    
+    if (actualExpenses.length === 0) {
+      return {
+        totalExpenses: 0,
+        averageExpense: 0,
+        expenseCount: 0,
+        categoryBreakdown: {},
+        monthlyTrends: {},
+        topSpender: null as { name: string; amount: number } | null,
+        topExpense: null as { name: string; amount: number } | null,
+        mostActiveCategory: null as string | null,
+        mostActiveCategoryAmount: 0,
+      };
+    }
+
+    // Category breakdown
+    const categoryTotals: { [key: string]: number } = {};
+    actualExpenses.forEach(expense => {
+      const category = expense.category || 'others';
+      categoryTotals[category] = (categoryTotals[category] || 0) + expense.amount;
+    });
+
+    // Monthly trends (last 6 months)
+    const monthlyTotals: { [key: string]: number } = {};
+    actualExpenses.forEach(expense => {
+      let monthKey: string;
+      
+      if (expense.expenseDate) {
+        try {
+          const date = parseISO(expense.expenseDate);
+          if (isValid(date)) {
+            monthKey = format(date, 'yyyy-MM');
+          } else {
+            monthKey = 'Unknown';
+          }
+        } catch {
+          monthKey = 'Unknown';
+        }
+      } else if (expense.createdAt?.toDate) {
+        monthKey = format(expense.createdAt.toDate(), 'yyyy-MM');
+      } else {
+        monthKey = 'Unknown';
+      }
+      
+      monthlyTotals[monthKey] = (monthlyTotals[monthKey] || 0) + expense.amount;
+    });
+
+    // Find top spender by total amount spent
+    let topSpender: { name: string; amount: number } | null = null;
+    let maxSpent = 0;
+    Object.entries(memberExpenditures).forEach(([email, amount]) => {
+      if (amount > maxSpent) {
+        maxSpent = amount;
+        const member = members.find(m => m.email === email);
+        topSpender = {
+          name: member?.email === user?.email ? 'You' : (member?.name || member?.email?.split('@')[0] || 'Unknown'),
+          amount
+        };
+      }
+    });
+
+    // Find top expense by amount
+    let topExpense: { name: string; amount: number } | null = null;
+    let maxExpenseAmount = 0;
+    actualExpenses.forEach(expense => {
+      if (expense.amount > maxExpenseAmount) {
+        maxExpenseAmount = expense.amount;
+        topExpense = {
+          name: expense.description,
+          amount: expense.amount
+        };
+      }
+    });
+
+    // Most active category
+    const mostActiveCategory = Object.entries(categoryTotals).reduce((prev, current) => 
+      current[1] > prev[1] ? current : prev, ['others', 0]
+    );
+
+    const totalAmount = actualExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+    return {
+      totalExpenses: totalAmount,
+      averageExpense: totalAmount / actualExpenses.length,
+      expenseCount: actualExpenses.length,
+      categoryBreakdown: categoryTotals,
+      monthlyTrends: monthlyTotals,
+      topSpender,
+      topExpense,
+      mostActiveCategory: mostActiveCategory[0],
+      mostActiveCategoryAmount: mostActiveCategory[1],
+    };
+  }, [expenses, members, memberExpenditures, user]);
 
   const getPayerDescription = (payers: { [email: string]: number }): string => {
     if (!payers) return 'no one';
@@ -369,7 +647,21 @@ export default function GroupDetailPage() {
         <div className="lg:col-span-2">
             <Card>
                 <CardHeader>
-                    <CardTitle>Expenses</CardTitle>
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <CardTitle>Expenses</CardTitle>
+                        <div className="relative max-w-sm">
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                placeholder="Search expenses..."
+                                value={expenseSearchTerm}
+                                onChange={(e) => {
+                                    setExpenseSearchTerm(e.target.value);
+                                    setCurrentExpensePage(1); // Reset to first page when searching
+                                }}
+                                className="pl-10"
+                            />
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {expenses.length === 0 ? (
@@ -377,56 +669,139 @@ export default function GroupDetailPage() {
                             <p className="text-muted-foreground">No expenses yet.</p>
                             <p className="text-muted-foreground">Click "Add Expense" to get started.</p>
                         </div>
+                    ) : groupedExpenses.length === 0 ? (
+                        <div className="text-center py-8">
+                            <p className="text-muted-foreground">No expenses match your search.</p>
+                            <Button 
+                                variant="outline" 
+                                onClick={() => {
+                                    setExpenseSearchTerm('');
+                                    setCurrentExpensePage(1);
+                                }}
+                                className="mt-2"
+                            >
+                                Clear Search
+                            </Button>
+                        </div>
                     ) : (
-                        <ul className="space-y-4">
-                            {expenses.map(expense => {
-                                const category = getCategoryByValue(expense.category || 'others');
-                                return (
-                                <li key={expense.id} className="flex items-start justify-between p-4 bg-muted/50 rounded-md">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-lg">{category.icon}</span>
-                                            <p className="font-medium">{expense.description}</p>
-                                            <span className="text-xs px-2 py-1 bg-muted rounded-full text-muted-foreground">
-                                                {category.label}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-muted-foreground mb-1">
-                                          {expense.splitType === 'payment' ? 'Payment' : `Paid by ${getPayerDescription(expense.payers)} and split between ${expense.splitBetween.length} people`}
-                                        </p>
-                                        {expense.notes && (
-                                            <div className="flex items-start gap-1 mt-2">
-                                                <MessageSquare className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                                                <p className="text-xs text-muted-foreground italic">{expense.notes}</p>
-                                            </div>
-                                        )}
+                        <>
+                        <div className="space-y-6">
+                            {paginatedGroupedExpenses.map(group => (
+                                <div key={group.date}>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <h4 className="text-sm font-semibold text-muted-foreground">{group.displayDate}</h4>
+                                        <div className="flex-1 h-px bg-border"></div>
+                                        <span className="text-xs text-muted-foreground">{group.expenses.length} expense{group.expenses.length !== 1 ? 's' : ''}</span>
                                     </div>
-                                    <div className="flex items-center gap-4 ml-4">
-                                        <p className="font-semibold text-lg">₹{expense.amount.toFixed(2)}</p>
-                                        {expense.splitType !== 'payment' && (
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <MoreVertical className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onSelect={() => handleOpenEditDialog(expense)}>
-                                                        <Edit className="mr-2 h-4 w-4" />
-                                                        <span>Edit</span>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onSelect={() => handleDeleteClick({type: 'expense', id: expense.id, name: expense.description})} className="text-destructive focus:text-destructive">
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        <span>Delete</span>
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        )}
-                                    </div>
-                                </li>
-                                );
-                            })}
-                        </ul>
+                                    <ul className="space-y-3">
+                                        {group.expenses.map(expense => {
+                                            const category = getCategoryByValue(expense.category || 'others');
+                                            return (
+                                            <li key={expense.id} className="flex items-start justify-between p-4 bg-muted/50 rounded-md">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-lg">{category.icon}</span>
+                                                        <p className="font-medium">{expense.description}</p>
+                                                        <span className="text-xs px-2 py-1 bg-muted rounded-full text-muted-foreground">
+                                                            {category.label}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground mb-1">
+                                                      {expense.splitType === 'payment' ? 'Payment' : `Paid by ${getPayerDescription(expense.payers)} and split between ${expense.splitBetween.length} people`}
+                                                    </p>
+                                                    {expense.notes && (
+                                                        <div className="flex items-start gap-1 mt-2">
+                                                            <MessageSquare className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                            <p className="text-xs text-muted-foreground italic">{expense.notes}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-4 ml-4">
+                                                    <p className="font-semibold text-lg">₹{expense.amount.toFixed(2)}</p>
+                                                    {expense.splitType !== 'payment' && (
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                                    <MoreVertical className="h-4 w-4" />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuItem onSelect={() => handleOpenEditDialog(expense)}>
+                                                                    <Edit className="mr-2 h-4 w-4" />
+                                                                    <span>Edit</span>
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem onSelect={() => handleDeleteClick({type: 'expense', id: expense.id, name: expense.description})} className="text-destructive focus:text-destructive">
+                                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                                    <span>Delete</span>
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    )}
+                                                </div>
+                                            </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {totalExpensePages > 1 && (
+                            <Pagination className="mt-6">
+                                <PaginationContent>
+                                    <PaginationItem>
+                                        <PaginationPrevious 
+                                            href="#" 
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (currentExpensePage > 1) handleExpensePageChange(currentExpensePage - 1);
+                                            }}
+                                            className={currentExpensePage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                        />
+                                    </PaginationItem>
+                                    
+                                    {Array.from({ length: Math.min(5, totalExpensePages) }, (_, i) => {
+                                        let page;
+                                        if (totalExpensePages <= 5) {
+                                            page = i + 1;
+                                        } else if (currentExpensePage <= 3) {
+                                            page = i + 1;
+                                        } else if (currentExpensePage >= totalExpensePages - 2) {
+                                            page = totalExpensePages - 4 + i;
+                                        } else {
+                                            page = currentExpensePage - 2 + i;
+                                        }
+                                        return page;
+                                    }).map((page) => (
+                                        <PaginationItem key={page}>
+                                            <PaginationLink
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    handleExpensePageChange(page);
+                                                }}
+                                                isActive={currentExpensePage === page}
+                                                className="cursor-pointer"
+                                            >
+                                                {page}
+                                            </PaginationLink>
+                                        </PaginationItem>
+                                    ))}
+                                    
+                                    <PaginationItem>
+                                        <PaginationNext 
+                                            href="#" 
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (currentExpensePage < totalExpensePages) handleExpensePageChange(currentExpensePage + 1);
+                                            }}
+                                            className={currentExpensePage >= totalExpensePages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                        />
+                                    </PaginationItem>
+                                </PaginationContent>
+                            </Pagination>
+                        )}
+                        </>
                     )}
                 </CardContent>
             </Card>
@@ -435,24 +810,162 @@ export default function GroupDetailPage() {
         <div className="space-y-8">
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5 text-muted-foreground" />
-                        Group Members
-                    </CardTitle>
-                    <CardDescription>{members.length} member{members.length > 1 && 's'}</CardDescription>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2">
+                                <Users className="h-5 w-5 text-muted-foreground" />
+                                Members
+                            </CardTitle>
+                            <CardDescription>{members.length} member{members.length > 1 && 's'}</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                            <span className={memberDisplayMode === 'spent' ? 'text-foreground font-medium' : 'text-muted-foreground'}>Spent</span>
+                            <Switch 
+                                className="h-3.5 w-10"
+                                checked={memberDisplayMode === 'incurred'}
+                                onCheckedChange={(checked) => setMemberDisplayMode(checked ? 'incurred' : 'spent')}
+                            />
+                            <span className={memberDisplayMode === 'incurred' ? 'text-foreground font-medium' : 'text-muted-foreground'}>Incurred</span>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <ul className="space-y-4">
-                        {members.map(member => (
-                            <li key={member.id} className="flex items-center gap-3">
-                                <UserAvatar user={member} size="md" className="h-9 w-9" />
-                                <span className="font-medium text-sm">
-                                  {member.email === user?.email ? 'You' : (member.name || member.email?.split('@')[0] || 'Unknown')}
-                                </span>
-                            </li>
-                        ))}
+                        {members.map(member => {
+                            const memberEmail = member.email || '';
+                            const displayAmount = memberDisplayMode === 'spent' 
+                                ? memberExpenditures[memberEmail] || 0
+                                : memberIncurredExpenses[memberEmail] || 0;
+                            const displayLabel = memberDisplayMode === 'spent' ? 'spent' : 'incurred';
+                            
+                            return (
+                                <li key={member.id} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <UserAvatar user={member} size="md" className="h-9 w-9" />
+                                        <span className="font-medium text-sm">
+                                          {member.email === user?.email ? 'You' : (member.name || member.email?.split('@')[0] || 'Unknown')}
+                                        </span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-sm font-medium text-muted-foreground">
+                                            ₹{formatAmount(displayAmount)}
+                                        </span>
+                                        <div className="text-xs text-muted-foreground">{displayLabel}</div>
+                                    </div>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader className="cursor-pointer" onClick={() => setShowAnalytics(!showAnalytics)}>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                            <CardTitle className="text-base">Analytics</CardTitle>
+                        </div>
+                        {showAnalytics ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </div>
+                </CardHeader>
+                {showAnalytics && (
+                    <CardContent className="space-y-4">
+                        {groupAnalytics.expenseCount === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">No expenses to analyze yet.</p>
+                        ) : (
+                            <>
+                                {/* Quick Stats */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground">Total Expenses</p>
+                                        <p className="text-lg font-semibold">₹{formatAmount(groupAnalytics.totalExpenses)}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground">Top Spend Amount</p>
+                                        <p className="text-lg font-semibold">₹{formatAmount(groupAnalytics.topExpense?.amount || 0)}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground">Top Spend Name</p>
+                                        <p className="text-lg font-semibold">{groupAnalytics.topExpense?.name && groupAnalytics.topExpense.name.length > 12 ? groupAnalytics.topExpense.name.substring(0, 12) + '...' : (groupAnalytics.topExpense?.name || 'N/A')}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground">Top Spender</p>
+                                        <div className="flex items-center gap-1">
+                                            <Crown className="h-3 w-3 text-yellow-500" />
+                                            <p className="text-sm font-medium">{groupAnalytics.topSpender?.name || 'N/A'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <Separator />
+
+                                {/* Category Breakdown */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                                        <h4 className="text-sm font-medium">Spending by Category</h4>
+                                    </div>
+                                    {Object.entries(groupAnalytics.categoryBreakdown)
+                                        .sort(([,a], [,b]) => b - a)
+                                        .slice(0, 5)
+                                        .map(([category, amount]) => {
+                                            const percentage = (amount / groupAnalytics.totalExpenses) * 100;
+                                            const categoryInfo = getCategoryByValue(category);
+                                            return (
+                                                <div key={category} className="space-y-1">
+                                                    <div className="flex items-center justify-between text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <span>{categoryInfo.icon}</span>
+                                                            <span>{categoryInfo.label}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-muted-foreground">₹{formatAmount(amount)}</span>
+                                                            <span className="text-xs text-muted-foreground">{percentage.toFixed(0)}%</span>
+                                                        </div>
+                                                    </div>
+                                                    <Progress value={percentage} className="h-1.5" />
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+
+                                {/* Monthly Trends */}
+                                {Object.keys(groupAnalytics.monthlyTrends).length > 1 && (
+                                    <>
+                                        <Separator />
+                                        <div className="space-y-3">
+                                            <h4 className="text-sm font-medium flex items-center gap-2">
+                                                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                                                Monthly Spending
+                                            </h4>
+                                            <div className="space-y-2">
+                                                {Object.entries(groupAnalytics.monthlyTrends)
+                                                    .filter(([month]) => month !== 'Unknown')
+                                                    .sort(([a], [b]) => b.localeCompare(a))
+                                                    .slice(0, 6)
+                                                    .map(([month, amount]) => {
+                                                        const maxAmount = Math.max(...Object.values(groupAnalytics.monthlyTrends));
+                                                        const percentage = (amount / maxAmount) * 100;
+                                                        const displayMonth = format(parseISO(month + '-01'), 'MMM yyyy');
+                                                        return (
+                                                            <div key={month} className="space-y-1">
+                                                                <div className="flex justify-between text-sm">
+                                                                    <span>{displayMonth}</span>
+                                                                    <span className="text-muted-foreground">₹{formatAmount(amount)}</span>
+                                                                </div>
+                                                                <Progress value={percentage} className="h-1.5" />
+                                                            </div>
+                                                        );
+                                                    })}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </CardContent>
+                )}
             </Card>
 
              <Card>

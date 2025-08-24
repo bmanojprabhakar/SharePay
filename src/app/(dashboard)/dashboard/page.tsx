@@ -30,7 +30,7 @@ interface Expense {
   notes?: string;
   payers: { [email: string]: number };
   splitBetween: string[];
-  splitType: 'equal' | 'unequal';
+  splitType: 'equal' | 'unequal' | 'payment';
   splitDetails?: { [email: string]: number };
   createdAt?: { toDate: () => Date };
   createdBy: string;
@@ -84,7 +84,7 @@ export default function DashboardPage() {
 
         for (const group of userGroups) {
           group.memberEmails.forEach(email => allMemberEmails.add(email));
-          const expensesQuery = query(collection(db, 'groups', group.id, 'expenses'), orderBy('createdAt', 'desc'), limit(10));
+          const expensesQuery = query(collection(db, 'groups', group.id, 'expenses'), orderBy('createdAt', 'desc'));
           const expensesSnapshot = await getDocs(expensesQuery);
           const groupExpenses = expensesSnapshot.docs.map(doc => ({
             id: doc.id,
@@ -103,6 +103,14 @@ export default function DashboardPage() {
 
           allExpenses.forEach(expense => {
             if (!expense.payers || !expense.splitBetween) return;
+
+            if (expense.splitType === 'payment') {
+              const amountYouPaid = expense.payers?.[user.email!] ?? 0;
+              const amountYouReceived = expense.splitDetails?.[user.email!] ?? 0;
+              totalYouOwe -= amountYouPaid;
+              totalOwedToYou -= amountYouReceived;
+              return;
+            }
 
             const userShare = expense.splitBetween.includes(user.email!)
               ? (expense.splitType === 'equal'

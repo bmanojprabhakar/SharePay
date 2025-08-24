@@ -46,6 +46,7 @@ const expenseFormSchema = z.object({
     amount: z.coerce.number().min(0.01, 'Amount must be greater than 0.'),
     category: z.string().default(DEFAULT_CATEGORY),
     notes: z.string().optional(),
+    expenseDate: z.string().optional(),
     paidBySingle: z.string().email().optional(),
     paidByMultiple: z.array(z.object({
         email: z.string().email(),
@@ -78,6 +79,7 @@ interface Expense {
     amount: number;
     category?: string;
     notes?: string;
+    expenseDate?: string;
     payers: { [email: string]: number };
     splitBetween: string[];
     splitType: 'equal' | 'unequal' | 'payment';
@@ -144,6 +146,7 @@ export function AddExpenseDialog({
         amount: expenseToEdit.amount,
         category: expenseToEdit.category || DEFAULT_CATEGORY,
         notes: expenseToEdit.notes || '',
+        expenseDate: expenseToEdit.expenseDate || '',
         paidBySingle: !isEditMultiPayer ? payerEmails[0] : user?.email ?? '',
         paidByMultiple: memberEmails.map(email => ({
           email,
@@ -162,11 +165,18 @@ export function AddExpenseDialog({
       setIsMultiPayer(false);
       const allMemberEmails = members.map(m => m.email!);
       
+      // Get current date in YYYY-MM-DD format
+      const today = new Date();
+      const currentDate = today.getFullYear() + '-' + 
+                         String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                         String(today.getDate()).padStart(2, '0');
+
       form.reset({
         description: '',
         amount: 0,
         category: DEFAULT_CATEGORY,
         notes: '',
+        expenseDate: currentDate,
         paidBySingle: user?.email ?? '',
         paidByMultiple: allMemberEmails.map(m => ({ email: m, amount: 0 })),
         splitType: 'equal',
@@ -253,6 +263,7 @@ export function AddExpenseDialog({
         amount: values.amount,
         category: values.category || DEFAULT_CATEGORY,
         notes: values.notes || '',
+        expenseDate: values.expenseDate || '',
         payers: payers,
         splitType: values.splitType,
         splitBetween: values.splitBetween,
@@ -367,6 +378,24 @@ export function AddExpenseDialog({
                     ))}
                     </SelectContent>
                 </Select>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+            
+            <FormField
+            control={form.control}
+            name="expenseDate"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Date (Optional)</FormLabel>
+                <FormControl>
+                    <Input 
+                        type="date" 
+                        {...field}
+                        className="w-full"
+                    />
+                </FormControl>
                 <FormMessage />
                 </FormItem>
             )}

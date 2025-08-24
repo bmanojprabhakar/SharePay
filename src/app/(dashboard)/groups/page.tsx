@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs, DocumentData, deleteDoc, doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
-import { Plus, ArrowRight, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Plus, ArrowRight, MoreVertical, Edit, Trash2, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -34,6 +34,18 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { getUserFriendlyErrorMessage, getErrorTitle } from '@/utils/error-messages';
+import { formatAmount } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Input } from '@/components/ui/input';
 
 interface Balances {
     youOwe: number;
@@ -49,6 +61,10 @@ export default function GroupsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [balances, setBalances] = useState<{[key: string]: Balances}>({});
+  const [totalExpenditures, setTotalExpenditures] = useState<{[key: string]: number}>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const groupsPerPage = 6;
+  const [searchTerm, setSearchTerm] = useState('');
 
   const calculateBalances = useCallback((expenses: DocumentData[], userEmail: string): Balances => {
     let totalOwedToYou = 0;
@@ -104,6 +120,7 @@ export default function GroupsPage() {
 
     const unsubscribers: Unsubscribe[] = [];
     const newBalances: {[key: string]: Balances} = {};
+    const newTotalExpenditures: {[key: string]: number} = {};
 
     groups.forEach(group => {
       const expensesQuery = query(collection(db, 'groups', group.id, 'expenses'));
@@ -111,7 +128,15 @@ export default function GroupsPage() {
         const expensesData = expensesSnapshot.docs.map(doc => doc.data());
         if (user.email) {
           newBalances[group.id] = calculateBalances(expensesData, user.email);
+          
+          // Calculate total expenditure for this group
+          const totalExpenditure = expensesData
+            .filter(expense => expense.splitType !== 'payment') // Exclude payments from total
+            .reduce((sum, expense) => sum + (expense.amount || 0), 0);
+          newTotalExpenditures[group.id] = totalExpenditure;
+          
           setBalances({...newBalances});
+          setTotalExpenditures({...newTotalExpenditures});
         }
       });
       unsubscribers.push(unsubscribe);
@@ -149,6 +174,29 @@ export default function GroupsPage() {
   };
 
 
+  // Filter groups based on search term
+  const filteredGroups = groups.filter(group => 
+    group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    group.memberEmails?.some((email: string) => 
+      email.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredGroups.length / groupsPerPage);
+  const startIndex = (currentPage - 1) * groupsPerPage;
+  const endIndex = startIndex + groupsPerPage;
+  const currentGroups = filteredGroups.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // Reset to first page when searching
+  };
+
   if (loadingUser || loading) {
     return <div>Loading groups...</div>;
   }
@@ -156,14 +204,25 @@ export default function GroupsPage() {
   return (
     <>
     <div className="flex flex-col gap-8">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold md:text-3xl">Groups</h1>
-        <Button asChild>
-          <Link href="/groups/create">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Group
-          </Link>
-        </Button>
+      <header className="space-y-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <h1 className="text-2xl font-semibold md:text-3xl">Groups</h1>
+          <Button asChild>
+            <Link href="/groups/create">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Group
+            </Link>
+          </Button>
+        </div>
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search groups..."
+            value={searchTerm}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </header>
       
       {groups.length === 0 ? (
@@ -181,20 +240,40 @@ export default function GroupsPage() {
             </Button>
           </CardContent>
         </Card>
+      ) : filteredGroups.length === 0 ? (
+        <Card className="text-center py-12">
+          <CardHeader>
+            <CardTitle>No groups found</CardTitle>
+            <CardDescription>No groups match your search criteria. Try adjusting your search term.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => handleSearchChange('')}>
+              Clear Search
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
+        <>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {groups.map((group) => (
+          {currentGroups.map((group) => (
             <Card key={group.id} className="hover:shadow-lg transition-shadow h-full flex flex-col">
               <CardHeader className="flex-row items-start justify-between">
-                <div>
-                    <CardTitle>
-                        <Link href={`/groups/${group.id}`} className="hover:underline">
-                            {group.name}
-                        </Link>
-                    </CardTitle>
-                    <CardDescription>
-                        {group.memberEmails?.length || 0} member{group.memberEmails?.length !== 1 && 's'}
-                    </CardDescription>
+                <div className="flex-1">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle>
+                            <Link href={`/groups/${group.id}`} className="hover:underline">
+                                {group.name}
+                            </Link>
+                        </CardTitle>
+                        <CardDescription>
+                            {group.memberEmails?.length || 0} member{group.memberEmails?.length !== 1 && 's'}
+                        </CardDescription>
+                      </div>
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 ml-2 shrink-0">
+                        ₹{formatAmount(totalExpenditures[group.id] || 0)}
+                      </Badge>
+                    </div>
                 </div>
                  {user?.uid === group.createdBy && (
                     <DropdownMenu>
@@ -228,6 +307,51 @@ export default function GroupsPage() {
             </Card>
           ))}
         </div>
+        
+        {totalPages > 1 && (
+          <Pagination className="mt-8">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage > 1) handlePageChange(currentPage - 1);
+                  }}
+                  className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <PaginationItem key={page}>
+                  <PaginationLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handlePageChange(page);
+                    }}
+                    isActive={currentPage === page}
+                    className="cursor-pointer"
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage < totalPages) handlePageChange(currentPage + 1);
+                  }}
+                  className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
+        </>
       )}
     </div>
     <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
