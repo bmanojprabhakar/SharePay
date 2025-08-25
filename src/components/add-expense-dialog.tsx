@@ -338,13 +338,13 @@ export function AddExpenseDialog({
   
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 pb-4">
             
             <FormField
             control={form.control}
@@ -352,7 +352,7 @@ export function AddExpenseDialog({
             render={({ field }) => (
                 <FormItem>
                 <FormLabel>Description</FormLabel>
-                <FormControl><Input placeholder="e.g., Dinner, Movie Tickets" {...field} /></FormControl>
+                <FormControl><Input placeholder="e.g., Dinner, Movie Tickets" {...field} className="h-12 text-base sm:h-10 sm:text-sm" /></FormControl>
                 <FormMessage />
                 </FormItem>
             )}
@@ -364,7 +364,7 @@ export function AddExpenseDialog({
             render={({ field }) => (
                 <FormItem>
                 <FormLabel>Amount (₹)</FormLabel>
-                <FormControl><Input type="number" placeholder="0.00" {...field} onFocus={handleFocus} /></FormControl>
+                <FormControl><Input type="number" placeholder="0.00" {...field} onFocus={handleFocus} className="h-12 text-base sm:h-10 sm:text-sm" /></FormControl>
                 <FormMessage />
                 </FormItem>
             )}
@@ -378,7 +378,7 @@ export function AddExpenseDialog({
                 <FormLabel>Category</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value} defaultValue={DEFAULT_CATEGORY}>
                     <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-12 text-base sm:h-10 sm:text-sm">
                         <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     </FormControl>
@@ -409,7 +409,7 @@ export function AddExpenseDialog({
                     value={field.value || "none"}
                 >
                     <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-12 text-base sm:h-10 sm:text-sm">
                         <SelectValue placeholder="Select payment type (optional)" />
                     </SelectTrigger>
                     </FormControl>
@@ -454,7 +454,7 @@ export function AddExpenseDialog({
                 <FormControl>
                     <Textarea 
                     placeholder="Add any additional details or notes about this expense..." 
-                    className="resize-none" 
+                    className="resize-none min-h-[48px] text-base sm:min-h-[40px] sm:text-sm" 
                     rows={2}
                     {...field} 
                     />
@@ -479,8 +479,8 @@ export function AddExpenseDialog({
                 {isMultiPayer ? (
                     <div className="space-y-2">
                         {members.map((member, index) => (
-                            <div key={member.id} className="flex items-center justify-between gap-4">
-                                <FormLabel className="font-normal text-sm">
+                            <div key={member.id} className="flex items-center justify-between gap-2 sm:gap-4">
+                                <FormLabel className="font-normal text-sm flex-1 truncate">
                                     {member.email === user?.email ? 'You' : (member.name || member.email!.split('@')[0])}
                                 </FormLabel>
                                 <FormField
@@ -488,7 +488,7 @@ export function AddExpenseDialog({
                                     name={`paidByMultiple.${index}.amount`}
                                     render={({ field }) => (
                                     <FormControl>
-                                        <Input type="number" {...field} className="h-8 w-24" placeholder="0.00" onFocus={handleFocus} />
+                                        <Input type="number" {...field} className="h-11 w-24 text-base sm:h-8 sm:w-24 sm:text-sm" placeholder="0.00" onFocus={handleFocus} />
                                     </FormControl>
                                     )}
                                 />
@@ -510,7 +510,7 @@ export function AddExpenseDialog({
                         render={({ field }) => (
                             <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                             <FormControl>
-                                <SelectTrigger>
+                                <SelectTrigger className="h-12 text-base sm:h-10 sm:text-sm">
                                 <SelectValue placeholder="Select who paid" />
                                 </SelectTrigger>
                             </FormControl>
@@ -551,13 +551,13 @@ export function AddExpenseDialog({
             <div className="mb-4"><FormLabel>Split between</FormLabel></div>
             <div className="space-y-2">
             {members.map((member, index) => (
-                <div key={member.id} className="flex items-center justify-between gap-4">
+                <div key={member.id} className="flex items-center justify-between gap-2 sm:gap-4">
                     <FormField
                         key={member.id}
                         control={form.control}
                         name="splitBetween"
                         render={({ field }) => (
-                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 flex-1">
                                 <FormControl>
                                     <Checkbox
                                         checked={field.value?.includes(member.email!)}
@@ -568,7 +568,7 @@ export function AddExpenseDialog({
                                         )}
                                     />
                                 </FormControl>
-                                <FormLabel className="font-normal text-sm">
+                                <FormLabel className="font-normal text-sm truncate">
                                     {member.email === user?.email ? 'You' : (member.name || member.email!.split('@')[0])}
                                 </FormLabel>
                             </FormItem>
@@ -580,7 +580,7 @@ export function AddExpenseDialog({
                             name={`unequalSplitDetails.${index}.amount`}
                             render={({ field }) => (
                                 <FormControl>
-                                <Input type="number" {...field} className="h-8 w-24" placeholder="0.00" onFocus={handleFocus} />
+                                <Input type="number" {...field} className="h-11 w-24 text-base sm:h-8 sm:w-24 sm:text-sm" placeholder="0.00" onFocus={handleFocus} />
                                 </FormControl>
                             )}
                         />
@@ -596,9 +596,9 @@ export function AddExpenseDialog({
             <FormMessage>{form.formState.errors.splitBetween?.message || form.formState.errors.unequalSplitDetails?.message}</FormMessage>
             </FormItem>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : buttonText}</Button>
+            <DialogFooter className="mt-6">
+              <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="w-full sm:w-auto">Cancel</Button>
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">{isSubmitting ? 'Saving...' : buttonText}</Button>
             </DialogFooter>
           </form>
         </Form>

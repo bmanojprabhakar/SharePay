@@ -203,30 +203,30 @@ export default function GroupsPage() {
 
   return (
     <>
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6 sm:gap-8 w-full max-w-full">
       <header className="space-y-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <h1 className="text-2xl font-semibold md:text-3xl">Groups</h1>
-          <Button asChild>
+        <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+          <h1 className="text-xl sm:text-2xl font-semibold md:text-3xl">Groups</h1>
+          <Button asChild className="w-full sm:w-auto">
             <Link href="/groups/create">
               <Plus className="mr-2 h-4 w-4" />
               Create Group
             </Link>
           </Button>
         </div>
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative max-w-full sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Search groups..."
             value={searchTerm}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-10"
+            className="pl-10 pr-4"
           />
         </div>
       </header>
       
       {groups.length === 0 ? (
-        <Card className="text-center py-12">
+        <Card className="text-center py-8 sm:py-12">
           <CardHeader>
             <CardTitle>No groups yet</CardTitle>
             <CardDescription>Get started by creating a new group.</CardDescription>
@@ -241,7 +241,7 @@ export default function GroupsPage() {
           </CardContent>
         </Card>
       ) : filteredGroups.length === 0 ? (
-        <Card className="text-center py-12">
+        <Card className="text-center py-8 sm:py-12">
           <CardHeader>
             <CardTitle>No groups found</CardTitle>
             <CardDescription>No groups match your search criteria. Try adjusting your search term.</CardDescription>
@@ -254,7 +254,7 @@ export default function GroupsPage() {
         </Card>
       ) : (
         <>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {currentGroups.map((group) => (
             <Card key={group.id} className="hover:shadow-lg transition-shadow h-full flex flex-col">
               <CardHeader className="flex-row items-start justify-between">
@@ -309,8 +309,9 @@ export default function GroupsPage() {
         </div>
         
         {totalPages > 1 && (
-          <Pagination className="mt-8">
-            <PaginationContent>
+          <div className="mt-8 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 pagination-scroll">
+            <Pagination className="min-w-max mx-0 justify-start">
+              <PaginationContent className="flex-nowrap">
               <PaginationItem>
                 <PaginationPrevious 
                   href="#" 
@@ -348,8 +349,9 @@ export default function GroupsPage() {
                   className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                 />
               </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+              </PaginationContent>
+            </Pagination>
+          </div>
         )}
         </>
       )}

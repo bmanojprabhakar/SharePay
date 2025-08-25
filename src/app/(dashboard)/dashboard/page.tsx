@@ -57,8 +57,8 @@ export default function DashboardPage() {
   const [recentActivity, setRecentActivity] = useState<Expense[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [friends, setFriends] = useState<string[]>([]);
-  const [friendsDetails, setFriendsDetails] = useState<{[email: string]: {name?: string}}>({});
-  const [allUserDetails, setAllUserDetails] = useState<{[email: string]: {name?: string}}>({});
+  const [friendsDetails, setFriendsDetails] = useState<{[email: string]: {name?: string; photoURL?: string}}>({});
+  const [allUserDetails, setAllUserDetails] = useState<{[email: string]: {name?: string; photoURL?: string}}>({});
   const [loadingData, setLoadingData] = useState(true);
   const [isSelectGroupOpen, setIsSelectGroupOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
@@ -154,14 +154,14 @@ export default function DashboardPage() {
         
         // Fetch details for all users
         const fetchAllUserDetails = async () => {
-          const details: {[email: string]: {name?: string}} = {};
+          const details: {[email: string]: {name?: string; photoURL?: string}} = {};
           await Promise.all(Array.from(allUniqueEmails).map(async (email: string) => {
             try {
               const userQuery = query(collection(db, 'users'), where('email', '==', email));
               const userSnapshot = await getDocs(userQuery);
               if (!userSnapshot.empty) {
                 const userData = userSnapshot.docs[0].data();
-                details[email] = { name: userData.name };
+                details[email] = { name: userData.name, photoURL: userData.photoURL };
               }
             } catch (error) {
               // Error handled silently
@@ -169,7 +169,7 @@ export default function DashboardPage() {
           }));
           setAllUserDetails(details);
           // Also set friends details as a subset
-          const friendsDetailsSubset: {[email: string]: {name?: string}} = {};
+          const friendsDetailsSubset: {[email: string]: {name?: string; photoURL?: string}} = {};
           friendsEmails.forEach(email => {
             friendsDetailsSubset[email] = details[email] || {};
           });
@@ -232,14 +232,14 @@ export default function DashboardPage() {
     <TooltipProvider>
       <SelectGroupDialog isOpen={isSelectGroupOpen} setIsOpen={setIsSelectGroupOpen} groups={groups} />
       <InviteDialog isOpen={isInviteOpen} setIsOpen={setIsInviteOpen} />
-      <div className="flex flex-col gap-8">
-        <header className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold md:text-3xl">Dashboard</h1>
-          <div className="flex gap-2">
+      <div className="flex flex-col gap-6 sm:gap-8 w-full max-w-full px-1 sm:px-0">
+        <header className="flex flex-col gap-4 sm:gap-4 md:flex-row md:items-center md:justify-between">
+          <h1 className="text-2xl sm:text-2xl font-semibold md:text-3xl">Dashboard</h1>
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="inline-block">
-                  <Button onClick={() => setIsSelectGroupOpen(true)} disabled={groups.length === 0}>
+                  <Button onClick={() => setIsSelectGroupOpen(true)} disabled={groups.length === 0} className="w-full sm:w-auto">
                     <Plus className="mr-2 h-4 w-4" />
                     Add Expense
                   </Button>
@@ -254,17 +254,17 @@ export default function DashboardPage() {
             <Button 
               variant="outline" 
               onClick={() => setIsInviteOpen(true)}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
+              className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
             >
               <UserPlus className="mr-2 h-4 w-4" />
               Invite Friends
             </Button>
-            <Button variant="outline" asChild>
+            <Button variant="outline" asChild className="w-full sm:w-auto">
               <Link href="/groups/create">Create Group</Link>
             </Button>
           </div>
         </header>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -304,7 +304,7 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-3">
+        <div className="grid gap-6 lg:gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
@@ -390,7 +390,8 @@ export default function DashboardPage() {
                             user={{ 
                               email: friendEmail,
                               name: friendsDetails[friendEmail]?.name,
-                              displayName: friendsDetails[friendEmail]?.name
+                              displayName: friendsDetails[friendEmail]?.name,
+                              photoURL: friendsDetails[friendEmail]?.photoURL
                             }}
                             size="md"
                             className="h-10 w-10"

@@ -111,43 +111,29 @@ export function UserAvatar({ user, size = 'md', className, fallbackClassName }: 
   }
 
   return (
-    <div className={cn(
-      'relative overflow-hidden rounded-full',
+    <Avatar className={cn(
       size === 'sm' && 'h-8 w-8',
       size === 'md' && 'h-10 w-10',
       size === 'lg' && 'h-12 w-12',
       className
     )}>
-      {photoURL ? (
-        <img
-          src={photoURL}
-          alt={user.displayName || user.email || 'User avatar'}
-          className="h-full w-full object-cover"
-          onLoad={(e) => {
-            e.currentTarget.style.display = 'block';
-          }}
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-            // Show fallback
-            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-            if (fallback) fallback.style.display = 'flex';
-          }}
+      {photoURL && (
+        <AvatarImage 
+          src={photoURL} 
+          alt={user.displayName || user.email || 'User avatar'} 
         />
-      ) : null}
-      <div 
-        className={cn(
-          'absolute inset-0 flex items-center justify-center text-white font-semibold',
-          colorClass,
-          size === 'sm' && 'text-xs',
-          size === 'md' && 'text-sm',
-          size === 'lg' && 'text-base',
-          photoURL ? 'hidden' : 'flex',
-          fallbackClassName
-        )}
-      >
+      )}
+      <AvatarFallback className={cn(
+        colorClass,
+        'text-white font-semibold',
+        size === 'sm' && 'text-xs',
+        size === 'md' && 'text-sm',
+        size === 'lg' && 'text-base',
+        fallbackClassName
+      )}>
         {initials}
-      </div>
-    </div>
+      </AvatarFallback>
+    </Avatar>
   );
 }
 

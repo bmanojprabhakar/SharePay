@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { Home, User as UserIcon, LogOut, Users } from 'lucide-react';
 import SharePayLogo from '@/components/sharepay-logo';
@@ -22,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { UserAvatar, getUserDisplayName } from '@/components/user-avatar';
 import { useUserProfile } from '@/hooks/use-user-profile';
+import { ThemeToggle } from '@/components/theme-toggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +37,7 @@ import { usePathname } from 'next/navigation';
 import { AUTH_CONFIG } from '@/lib/auth-config';
 import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
 
-export default function DashboardLayout({
+function DashboardContent({
   children,
 }: {
   children: React.ReactNode;
@@ -46,6 +48,7 @@ export default function DashboardLayout({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { profile } = useUserProfile(user);
+  const { setOpenMobile, isMobile } = useSidebar();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -85,6 +88,12 @@ export default function DashboardLayout({
     }
   };
 
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -98,8 +107,8 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
-      <Sidebar>
+    <>
+      <Sidebar collapsible="offcanvas">
         <SidebarHeader>
           <div className="flex items-center gap-2">
             <SharePayLogo />
@@ -109,7 +118,7 @@ export default function DashboardLayout({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname.startsWith('/dashboard')}>
-                <Link href="/dashboard">
+                <Link href="/dashboard" onClick={handleNavClick}>
                   <Home />
                   Dashboard
                 </Link>
@@ -117,7 +126,7 @@ export default function DashboardLayout({
             </SidebarMenuItem>
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname.startsWith('/groups')}>
-                <Link href="/groups">
+                <Link href="/groups" onClick={handleNavClick}>
                   <Users />
                   Groups
                 </Link>
@@ -127,32 +136,49 @@ export default function DashboardLayout({
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-16 items-center justify-end gap-4 border-b bg-background px-6">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <UserAvatar user={{...user, name: profile?.name}} size="md" className="h-9 w-9" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>{profile?.name || getUserDisplayName(user)}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/profile">
-                  <UserIcon className="mr-2 h-4 w-4" />
-                  Profile
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <header className="flex h-14 sm:h-16 items-center justify-between gap-4 border-b bg-background px-3 sm:px-4 md:px-6">
+          <SidebarTrigger className="md:hidden h-12 w-12 border-2 border-border bg-muted/50 hover:bg-muted" />
+          <div className="flex-1"></div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <UserAvatar user={{...user, name: profile?.name}} size="md" className="h-9 w-9" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>{profile?.name || getUserDisplayName(user)}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/profile">
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
-        <main className="flex-1 p-6 bg-muted/30">{children}</main>
+        <main className="flex-1 p-3 sm:p-4 md:p-6 bg-muted/30 overflow-x-hidden min-h-0 w-full max-w-full">{children}</main>
       </SidebarInset>
+    </>
+  );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <SidebarProvider>
+      <DashboardContent>{children}</DashboardContent>
     </SidebarProvider>
   );
 }

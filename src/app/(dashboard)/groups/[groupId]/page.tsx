@@ -198,6 +198,7 @@ export default function GroupDetailPage() {
                     email: email,
                     name: userData.name || undefined,
                     displayName: userData.name || undefined, // For UserAvatar compatibility
+                    photoURL: userData.photoURL || undefined, // Include photoURL
                   };
                 } else {
                   // Fallback for users without documents
@@ -638,31 +639,31 @@ export default function GroupDetailPage() {
         members={members}
         expenses={expenses}
     />
-    <div className="flex flex-col gap-8">
-      <header className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" onClick={() => router.push('/groups')}>
+    <div className="flex flex-col gap-6 sm:gap-8 w-full max-w-full px-1 sm:px-0">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 sm:gap-4">
+            <Button variant="outline" size="icon" onClick={() => router.push('/groups')} className="shrink-0">
                 <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h1 className="text-2xl font-semibold md:text-3xl">{group.name}</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold md:text-3xl truncate">{group.name}</h1>
         </div>
-        <div className="flex items-center gap-2">
-            <Button onClick={handleOpenAddDialog}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
+            <Button onClick={handleOpenAddDialog} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             Add Expense
             </Button>
-            <Button variant="outline" onClick={() => setIsImportExportOpen(true)}>
+            <Button variant="outline" onClick={() => setIsImportExportOpen(true)} className="w-full sm:w-auto">
             <FileText className="mr-2 h-4 w-4" />
             Import/Export
             </Button>
             {isCreator && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="icon">
+                        <Button variant="outline" size="icon" className="shrink-0">
                             <MoreVertical className="h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="min-w-[160px]">
                          <DropdownMenuItem onSelect={() => router.push(`/groups/${group.id}/edit`)}>
                             <Edit className="mr-2 h-4 w-4" />
                             <span>Edit</span>
@@ -677,14 +678,14 @@ export default function GroupDetailPage() {
         </div>
       </header>
       
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-6 sm:gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
             <Card>
                 <CardHeader>
-                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
                         <CardTitle>Expenses</CardTitle>
-                        <div className="relative max-w-sm">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <div className="relative max-w-full sm:max-w-sm">
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                             <Input
                                 placeholder="Search expenses..."
                                 value={expenseSearchTerm}
@@ -692,7 +693,7 @@ export default function GroupDetailPage() {
                                     setExpenseSearchTerm(e.target.value);
                                     setCurrentExpensePage(1); // Reset to first page when searching
                                 }}
-                                className="pl-10"
+                                className="pl-10 pr-4"
                             />
                         </div>
                     </div>
@@ -731,35 +732,35 @@ export default function GroupDetailPage() {
                                         {group.expenses.map(expense => {
                                             const category = getCategoryByValue(expense.category || 'others');
                                             return (
-                                            <li key={expense.id} className="flex items-start justify-between p-4 bg-muted/50 rounded-md">
-                                                <div className="flex-1">
+                                            <li key={expense.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between p-3 sm:p-4 bg-muted/50 rounded-md gap-3 sm:gap-4 overflow-hidden">
+                                                <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <span className="text-lg">{category.icon}</span>
-                                                        <p className="font-medium">{expense.description}</p>
+                                                        <p className="font-medium truncate">{expense.description}</p>
                                                         <span className="text-xs px-2 py-1 bg-muted rounded-full text-muted-foreground">
                                                             {category.label}
                                                         </span>
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground mb-1">
+                                                    <p className="text-sm text-muted-foreground mb-1 break-words">
                                                       {expense.splitType === 'payment' ? 'Payment' : `Paid by ${getPayerDescription(expense.payers)} and split between ${expense.splitBetween.length} people`}
                                                     </p>
                                                     {expense.notes && (
                                                         <div className="flex items-start gap-1 mt-2">
                                                             <MessageSquare className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                                                            <p className="text-xs text-muted-foreground italic">{expense.notes}</p>
+                                                            <p className="text-xs text-muted-foreground italic break-words">{expense.notes}</p>
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-4 ml-4">
+                                                <div className="flex items-center justify-between sm:justify-start sm:gap-4 sm:ml-4">
                                                     <p className="font-semibold text-lg">₹{expense.amount.toFixed(2)}</p>
                                                     {expense.splitType !== 'payment' && (
                                                         <DropdownMenu>
                                                             <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                                <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 shrink-0">
                                                                     <MoreVertical className="h-4 w-4" />
                                                                 </Button>
                                                             </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
+                                                            <DropdownMenuContent align="end" className="min-w-[140px]">
                                                                 <DropdownMenuItem onSelect={() => handleOpenEditDialog(expense)}>
                                                                     <Edit className="mr-2 h-4 w-4" />
                                                                     <span>Edit</span>
@@ -781,8 +782,9 @@ export default function GroupDetailPage() {
                         </div>
                         
                         {totalExpensePages > 1 && (
-                            <Pagination className="mt-6">
-                                <PaginationContent>
+                            <div className="mt-6 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 pagination-scroll">
+                                <Pagination className="min-w-max mx-0 justify-start">
+                                    <PaginationContent className="flex-nowrap">
                                     <PaginationItem>
                                         <PaginationPrevious 
                                             href="#" 
@@ -832,8 +834,9 @@ export default function GroupDetailPage() {
                                             className={currentExpensePage >= totalExpensePages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                                         />
                                     </PaginationItem>
-                                </PaginationContent>
-                            </Pagination>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
                         )}
                         </>
                     )}
