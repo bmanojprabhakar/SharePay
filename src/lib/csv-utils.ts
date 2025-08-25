@@ -4,11 +4,12 @@ export interface CSVExpense {
   date: string;
   description: string;
   amount: number;
-  paidBy: string;
+  paidBy: { [email: string]: number }; // Support multiple payers with amounts
   splitType: 'equal' | 'unequal';
   splitBetween: string[];
   splitDetails?: { [email: string]: number };
   category?: string;
+  paymentType?: string;
   notes?: string;
 }
 
@@ -22,20 +23,48 @@ export interface FirestoreExpense {
   createdAt: Date;
   createdBy: string;
   category?: string;
+  paymentType?: string;
   notes?: string;
+  expenseDate?: string;
 }
 
-// Simple CSV parser function
+// Proper CSV parser function that handles quoted fields
 function parseCSV(csvContent: string): any[] {
   const lines = csvContent.trim().split('\n');
   if (lines.length < 2) throw new Error('CSV must have at least header and one data row');
   
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  // Parse CSV line respecting quoted fields
+  function parseCSVLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    result.push(current.trim());
+    return result;
+  }
+  
+  const headers = parseCSVLine(lines[0]).map(h => h.replace(/"/g, ''));
   const records = [];
   
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-    if (values.length !== headers.length) continue; // Skip malformed rows
+    const values = parseCSVLine(lines[i]).map(v => v.replace(/"/g, ''));
+    if (values.length !== headers.length) {
+      console.warn(`Row ${i + 1}: Expected ${headers.length} fields, got ${values.length}. Skipping row.`);
+      continue; // Skip malformed rows
+    }
     
     const record: any = {};
     headers.forEach((header, index) => {
@@ -64,27 +93,69 @@ export function parseCSVExpenses(csvContent: string): CSVExpense[] {
         throw new Error(`Row ${index + 2}: Invalid amount "${record.Amount}"`);
       }
 
-      // Parse split between (comma-separated emails)
-      const splitBetween = record.SplitBetween.split(',').map((email: string) => email.trim());
+      // Parse multiple payers (supports both old and new format)
+      // New format: "email1:amount1;email2:amount2" or old format: "email"
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      let paidBy: { [email: string]: number } = {};
+      
+      if (record.PaidBy.includes(':')) {
+        // New format with amounts: "email1:amount1;email2:amount2"
+        const payerDetails = record.PaidBy.split(';');
+        let totalPaidAmount = 0;
+        
+        for (const detail of payerDetails) {
+          const [email, amountStr] = detail.split(':').map((s: string) => s.trim());
+          if (email && amountStr) {
+            if (!emailRegex.test(email)) {
+              throw new Error(`Row ${index + 2}: Invalid PaidBy email "${email}"`);
+            }
+            const paidAmount = parseFloat(amountStr.replace(/[₹,]/g, ''));
+            if (isNaN(paidAmount) || paidAmount <= 0) {
+              throw new Error(`Row ${index + 2}: Invalid paid amount "${amountStr}" for "${email}"`);
+            }
+            paidBy[email] = paidAmount;
+            totalPaidAmount += paidAmount;
+          }
+        }
+        
+        // Validate total paid amount matches expense amount
+        if (Math.abs(totalPaidAmount - amount) > 0.01) {
+          throw new Error(`Row ${index + 2}: Total paid amount (₹${totalPaidAmount}) doesn't match expense amount (₹${amount})`);
+        }
+      } else {
+        // Old format: single payer pays full amount
+        if (!emailRegex.test(record.PaidBy)) {
+          throw new Error(`Row ${index + 2}: Invalid PaidBy email "${record.PaidBy}"`);
+        }
+        paidBy[record.PaidBy.trim()] = amount;
+      }
+
+      // Parse split between (semicolon-separated for new format, comma-separated for backward compatibility)
+      const splitBetween = record.SplitBetween.includes(';') 
+        ? record.SplitBetween.split(';').map((email: string) => email.trim())
+        : record.SplitBetween.split(',').map((email: string) => email.trim());
+      
       if (splitBetween.length === 0) {
         throw new Error(`Row ${index + 2}: No valid emails in SplitBetween`);
       }
 
-      // Validate emails
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      // Validate split between emails
       const invalidEmails = splitBetween.filter((email: string) => !emailRegex.test(email));
       if (invalidEmails.length > 0) {
-        throw new Error(`Row ${index + 2}: Invalid email addresses: ${invalidEmails.join(', ')}`);
+        throw new Error(`Row ${index + 2}: Invalid email addresses in SplitBetween: ${invalidEmails.join(', ')}`);
       }
 
       // Parse split type
       const splitType = record.SplitType?.toLowerCase() === 'unequal' ? 'unequal' : 'equal';
 
-      // Parse split details for unequal splits
+      // Parse split details for unequal splits (semicolon-separated for new format, comma-separated for backward compatibility)
       let splitDetails: { [email: string]: number } | undefined;
       if (splitType === 'unequal' && record.SplitDetails) {
         splitDetails = {};
-        const details = record.SplitDetails.split(',');
+        const details = record.SplitDetails.includes(';')
+          ? record.SplitDetails.split(';')
+          : record.SplitDetails.split(',');
+          
         for (const detail of details) {
           const [email, amountStr] = detail.split(':').map((s: string) => s.trim());
           if (email && amountStr) {
@@ -102,26 +173,25 @@ export function parseCSVExpenses(csvContent: string): CSVExpense[] {
         }
       }
 
-      // Validate paid by email
-      if (!emailRegex.test(record.PaidBy)) {
-        throw new Error(`Row ${index + 2}: Invalid PaidBy email "${record.PaidBy}"`);
-      }
-
-      // Parse date
-      const date = new Date(record.Date);
-      if (isNaN(date.getTime())) {
-        throw new Error(`Row ${index + 2}: Invalid date format "${record.Date}". Use YYYY-MM-DD format.`);
+      // Parse date - allow "Unknown" as a valid value
+      let dateValue = record.Date;
+      if (record.Date.toLowerCase() !== 'unknown') {
+        const date = new Date(record.Date);
+        if (isNaN(date.getTime())) {
+          throw new Error(`Row ${index + 2}: Invalid date format "${record.Date}". Use YYYY-MM-DD format or "Unknown".`);
+        }
       }
 
       return {
         date: record.Date,
         description: record.Description.trim(),
         amount,
-        paidBy: record.PaidBy.trim(),
+        paidBy,
         splitType,
         splitBetween,
         splitDetails,
         category: record.Category?.trim() || '',
+        paymentType: record.PaymentType?.trim() || '',
         notes: record.Notes?.trim() || '',
       };
     });
@@ -135,48 +205,96 @@ export function parseCSVExpenses(csvContent: string): CSVExpense[] {
 
 // Convert CSV expenses to Firestore format
 export function convertCSVToFirestore(csvExpenses: CSVExpense[], currentUserEmail: string): FirestoreExpense[] {
-  return csvExpenses.map((csvExpense) => {
-    // Create payers object
-    const payers: { [email: string]: number } = {
-      [csvExpense.paidBy]: csvExpense.amount
-    };
+  return csvExpenses.map((csvExpense, index) => {
+    // Use the payers object directly from CSV parsing
+    const payers: { [email: string]: number } = csvExpense.paidBy;
 
-    return {
+    // Handle user-entered expense date properly
+    let expenseDate: string | undefined;
+    if (csvExpense.date && csvExpense.date !== 'Unknown') {
+      try {
+        const parsedDate = new Date(csvExpense.date);
+        if (!isNaN(parsedDate.getTime())) {
+          expenseDate = csvExpense.date;
+        }
+      } catch {
+        // If date parsing fails, leave expenseDate as undefined
+        console.warn(`Failed to parse date "${csvExpense.date}" for expense ${index + 1}`);
+      }
+    }
+
+    const firestoreExpense: FirestoreExpense = {
       description: csvExpense.description,
       amount: csvExpense.amount,
       payers,
       splitBetween: csvExpense.splitBetween,
       splitType: csvExpense.splitType,
-      splitDetails: csvExpense.splitDetails,
-      createdAt: new Date(csvExpense.date),
+      createdAt: new Date(), // Use current timestamp for when the record was created
       createdBy: currentUserEmail,
-      category: csvExpense.category,
-      notes: csvExpense.notes,
     };
+
+    // Only add optional fields if they have valid values
+    if (csvExpense.splitDetails && Object.keys(csvExpense.splitDetails).length > 0) {
+      firestoreExpense.splitDetails = csvExpense.splitDetails;
+    }
+
+    if (csvExpense.category && csvExpense.category.trim() !== '') {
+      firestoreExpense.category = csvExpense.category.trim();
+    }
+
+    if (csvExpense.paymentType && csvExpense.paymentType.trim() !== '') {
+      firestoreExpense.paymentType = csvExpense.paymentType.trim();
+    }
+
+    if (csvExpense.notes && csvExpense.notes.trim() !== '') {
+      firestoreExpense.notes = csvExpense.notes.trim();
+    }
+
+    if (expenseDate && expenseDate.trim() !== '') {
+      firestoreExpense.expenseDate = expenseDate.trim();
+    }
+    
+    return firestoreExpense;
   });
 }
 
 // Export expenses to CSV format
 export function exportExpensesToCSV(expenses: FirestoreExpense[]): string {
-  const headers = ['Date', 'Description', 'Amount', 'PaidBy', 'SplitType', 'SplitBetween', 'SplitDetails', 'Category', 'Notes'];
+  const headers = ['Date', 'Description', 'Amount', 'PaidBy', 'SplitType', 'SplitBetween', 'SplitDetails', 'Category', 'PaymentType', 'Notes'];
   
   const rows = expenses.map(expense => {
-    // Get the primary payer (first one with non-zero amount)
-    const paidBy = Object.keys(expense.payers).find(email => expense.payers[email] > 0) || '';
+    // Format multiple payers with amounts (using semicolon separator to avoid CSV delimiter conflict)
+    const paidBy = Object.entries(expense.payers)
+      .filter(([email, amount]) => amount > 0)
+      .map(([email, amount]) => `${email}:${amount}`)
+      .join(';');
     
-    // Format split between
-    const splitBetween = expense.splitBetween.join(',');
+    // Format split between (using semicolon separator to avoid CSV delimiter conflict)
+    const splitBetween = expense.splitBetween.join(';');
     
-    // Format split details for unequal splits
+    // Format split details for unequal splits (using semicolon separator)
     let splitDetailsStr = '';
     if (expense.splitType === 'unequal' && expense.splitDetails) {
       splitDetailsStr = Object.entries(expense.splitDetails)
         .map(([email, amount]) => `${email}:${amount}`)
-        .join(',');
+        .join(';');
+    }
+
+    // Use expenseDate if available, otherwise mark as Unknown
+    let dateStr = 'Unknown';
+    if (expense.expenseDate && expense.expenseDate.trim() !== '') {
+      try {
+        const parsedDate = new Date(expense.expenseDate);
+        if (!isNaN(parsedDate.getTime())) {
+          dateStr = parsedDate.toISOString().split('T')[0];
+        }
+      } catch {
+        // Keep as 'Unknown' if parsing fails
+      }
     }
 
     return [
-      expense.createdAt.toISOString().split('T')[0], // Date in YYYY-MM-DD format
+      dateStr, // Use user-entered expense date or 'Unknown'
       `"${expense.description}"`, // Wrap in quotes to handle commas
       expense.amount,
       paidBy,
@@ -184,6 +302,7 @@ export function exportExpensesToCSV(expenses: FirestoreExpense[]): string {
       `"${splitBetween}"`, // Wrap in quotes to handle commas
       splitDetailsStr ? `"${splitDetailsStr}"` : '',
       expense.category || '',
+      expense.paymentType || '',
       expense.notes ? `"${expense.notes}"` : '', // Wrap in quotes to handle commas
     ];
   });
@@ -199,34 +318,37 @@ export function generateSampleCSV(): string {
       Date: '2024-01-15',
       Description: 'Dinner at Restaurant',
       Amount: '1200',
-      PaidBy: 'john@example.com',
+      PaidBy: 'john@example.com:1200',
       SplitType: 'equal',
-      SplitBetween: 'john@example.com,jane@example.com,bob@example.com',
+      SplitBetween: 'john@example.com;jane@example.com;bob@example.com',
       SplitDetails: '',
       Category: 'Food',
+      PaymentType: 'card',
       Notes: 'Team dinner',
     },
     {
       Date: '2024-01-16',
-      Description: 'Uber Ride',
+      Description: 'Uber Ride - Multiple Payers',
       Amount: '300',
-      PaidBy: 'jane@example.com',
+      PaidBy: 'jane@example.com:200;john@example.com:100',
       SplitType: 'unequal',
-      SplitBetween: 'jane@example.com,john@example.com',
-      SplitDetails: 'jane@example.com:200,john@example.com:100',
+      SplitBetween: 'jane@example.com;john@example.com',
+      SplitDetails: 'jane@example.com:200;john@example.com:100',
       Category: 'Transport',
-      Notes: 'Airport pickup',
+      PaymentType: 'upi',
+      Notes: 'Airport pickup - split payment',
     },
     {
-      Date: '2024-01-17',
-      Description: 'Hotel Booking',
-      Amount: '5000',
-      PaidBy: 'bob@example.com',
+      Date: 'Unknown',
+      Description: 'Miscellaneous Expense',
+      Amount: '500',
+      PaidBy: 'bob@example.com:500',
       SplitType: 'equal',
-      SplitBetween: 'bob@example.com,jane@example.com,john@example.com',
+      SplitBetween: 'bob@example.com;jane@example.com;john@example.com',
       SplitDetails: '',
-      Category: 'Accommodation',
-      Notes: 'Weekend trip',
+      Category: 'Others',
+      PaymentType: 'cash',
+      Notes: 'Date not available',
     },
   ];
 

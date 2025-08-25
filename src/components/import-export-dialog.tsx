@@ -170,8 +170,17 @@ export function ImportExportDialog({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // Handle dialog close - reset state when dialog is closed
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      // Dialog is being closed - reset the import state
+      resetImport();
+    }
+    setIsOpen(open);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Import & Export Expenses</DialogTitle>

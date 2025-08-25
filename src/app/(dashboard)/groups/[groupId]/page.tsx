@@ -112,12 +112,45 @@ export default function GroupDetailPage() {
     try {
       const expensesCollection = firestoreCollection(db, 'groups', groupId, 'expenses');
       
-      // Add each expense to Firestore
-      for (const expense of firestoreExpenses) {
-        await addDoc(expensesCollection, {
-          ...expense,
-          createdAt: expense.createdAt || new Date(),
-        });
+      // Add each expense to Firestore with detailed logging
+      for (let i = 0; i < firestoreExpenses.length; i++) {
+        const expense = firestoreExpenses[i];
+        
+        try {
+          // Log the expense data for debugging
+          console.log(`Processing expense ${i + 1}/${firestoreExpenses.length}:`, expense);
+          
+          // Validate and clean the expense data
+          const cleanedExpense = {
+            description: expense.description || '',
+            amount: Number(expense.amount) || 0,
+            payers: expense.payers || {},
+            splitBetween: expense.splitBetween || [],
+            splitType: expense.splitType || 'equal',
+            splitDetails: expense.splitDetails || undefined,
+            createdAt: expense.createdAt instanceof Date ? expense.createdAt : new Date(),
+            createdBy: expense.createdBy || '',
+            category: expense.category || undefined,
+            notes: expense.notes || undefined,
+            expenseDate: expense.expenseDate || undefined,
+          };
+          
+          // Remove undefined values to avoid Firestore issues
+          Object.keys(cleanedExpense).forEach(key => {
+            if (cleanedExpense[key as keyof typeof cleanedExpense] === undefined) {
+              delete cleanedExpense[key as keyof typeof cleanedExpense];
+            }
+          });
+          
+          console.log(`Cleaned expense data:`, cleanedExpense);
+          
+          await addDoc(expensesCollection, cleanedExpense);
+          console.log(`Successfully added expense ${i + 1}`);
+        } catch (expenseError) {
+          console.error(`Error adding expense ${i + 1}:`, expenseError);
+          console.error(`Problematic expense data:`, expense);
+          throw new Error(`Failed to import expense ${i + 1}: ${expenseError instanceof Error ? expenseError.message : 'Unknown error'}`);
+        }
       }
 
       toast({
@@ -125,10 +158,11 @@ export default function GroupDetailPage() {
         description: `Successfully imported ${firestoreExpenses.length} expense${firestoreExpenses.length !== 1 ? 's' : ''}.`,
       });
     } catch (error) {
+      console.error('Import failed with error:', error);
       toast({
         variant: 'destructive',
         title: 'Import failed',
-        description: 'Failed to import expenses. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to import expenses. Please try again.',
       });
       throw error;
     }

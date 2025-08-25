@@ -41,10 +41,21 @@ import {
 import { EXPENSE_CATEGORIES, DEFAULT_CATEGORY } from '@/lib/expense-categories';
 import { getUserFriendlyErrorMessage, getErrorTitle } from '@/utils/error-messages';
 
+const PAYMENT_TYPES = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Card' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'net_banking', label: 'Net Banking' },
+  { value: 'wallet', label: 'Digital Wallet' },
+  { value: 'other', label: 'Other' },
+];
+
 const expenseFormSchema = z.object({
     description: z.string().min(1, 'Description is required.'),
     amount: z.coerce.number().min(0.01, 'Amount must be greater than 0.'),
     category: z.string().default(DEFAULT_CATEGORY),
+    paymentType: z.string().optional(),
     notes: z.string().optional(),
     expenseDate: z.string().optional(),
     paidBySingle: z.string().email().optional(),
@@ -78,6 +89,7 @@ interface Expense {
     description: string;
     amount: number;
     category?: string;
+    paymentType?: string;
     notes?: string;
     expenseDate?: string;
     payers: { [email: string]: number };
@@ -145,6 +157,7 @@ export function AddExpenseDialog({
         description: expenseToEdit.description,
         amount: expenseToEdit.amount,
         category: expenseToEdit.category || DEFAULT_CATEGORY,
+        paymentType: expenseToEdit.paymentType || '',
         notes: expenseToEdit.notes || '',
         expenseDate: expenseToEdit.expenseDate || '',
         paidBySingle: !isEditMultiPayer ? payerEmails[0] : user?.email ?? '',
@@ -175,6 +188,7 @@ export function AddExpenseDialog({
         description: '',
         amount: 0,
         category: DEFAULT_CATEGORY,
+        paymentType: '',
         notes: '',
         expenseDate: currentDate,
         paidBySingle: user?.email ?? '',
@@ -262,6 +276,7 @@ export function AddExpenseDialog({
         description: values.description,
         amount: values.amount,
         category: values.category || DEFAULT_CATEGORY,
+        paymentType: values.paymentType || '',
         notes: values.notes || '',
         expenseDate: values.expenseDate || '',
         payers: payers,
@@ -374,6 +389,35 @@ export function AddExpenseDialog({
                             <span>{category.icon}</span>
                             <span>{category.label}</span>
                         </span>
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+            
+            <FormField
+            control={form.control}
+            name="paymentType"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Payment Type (Optional)</FormLabel>
+                <Select 
+                    onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                    value={field.value || "none"}
+                >
+                    <FormControl>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select payment type (optional)" />
+                    </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                    <SelectItem value="none">No payment type</SelectItem>
+                    {PAYMENT_TYPES.map((paymentType) => (
+                        <SelectItem key={paymentType.value} value={paymentType.value}>
+                        {paymentType.label}
                         </SelectItem>
                     ))}
                     </SelectContent>
