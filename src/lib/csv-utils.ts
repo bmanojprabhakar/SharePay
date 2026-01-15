@@ -1,4 +1,157 @@
 // Simple CSV parser without external dependencies
+import { EXPENSE_CATEGORIES, DEFAULT_CATEGORY } from './expense-categories';
+
+// Helper function to map payment type names to valid values
+function mapPaymentTypeValue(paymentTypeInput: string): string {
+  if (!paymentTypeInput || paymentTypeInput.trim() === '') {
+    return '';
+  }
+
+  const input = paymentTypeInput.trim().toLowerCase();
+  
+  // Valid payment type values
+  const validPaymentTypes = ['cash', 'card', 'upi', 'bank_transfer', 'net_banking'];
+  
+  // Direct match
+  if (validPaymentTypes.includes(input)) {
+    return input;
+  }
+  
+  // Common payment type mappings
+  const paymentTypeMappings: { [key: string]: string } = {
+    'credit': 'card',
+    'debit': 'card',
+    'credit card': 'card',
+    'debit card': 'card',
+    'bank': 'bank_transfer',
+    'transfer': 'bank_transfer',
+    'online': 'net_banking',
+    'net': 'net_banking',
+    'banking': 'net_banking',
+    'netbanking': 'net_banking',
+    'paytm': 'upi',
+    'gpay': 'upi',
+    'phonepe': 'upi',
+    'googlepay': 'upi',
+    'bhim': 'upi',
+  };
+  
+  // Check mappings
+  if (paymentTypeMappings[input]) {
+    return paymentTypeMappings[input];
+  }
+  
+  // Partial matches
+  for (const [key, value] of Object.entries(paymentTypeMappings)) {
+    if (input.includes(key) || key.includes(input)) {
+      return value;
+    }
+  }
+  
+  // If no match found, return empty string (optional field)
+  return '';
+}
+
+// Helper function to map category names to valid category values
+function mapCategoryValue(categoryInput: string): string {
+  if (!categoryInput || categoryInput.trim() === '') {
+    return DEFAULT_CATEGORY;
+  }
+
+  const input = categoryInput.trim().toLowerCase();
+  
+  // Direct match with category values
+  const exactMatch = EXPENSE_CATEGORIES.find(cat => cat.value === input);
+  if (exactMatch) return exactMatch.value;
+  
+  // Match with category labels (case insensitive)
+  const labelMatch = EXPENSE_CATEGORIES.find(cat => 
+    cat.label.toLowerCase() === input
+  );
+  if (labelMatch) return labelMatch.value;
+  
+  // Common category mappings
+  const categoryMappings: { [key: string]: string } = {
+    'food': 'food-drinks',
+    'drink': 'food-drinks',
+    'drinks': 'food-drinks',
+    'restaurant': 'food-drinks',
+    'dining': 'food-drinks',
+    'transport': 'transportation',
+    'uber': 'transportation',
+    'cab': 'transportation',
+    'taxi': 'transportation',
+    'bus': 'transportation',
+    'train': 'transportation',
+    'flight': 'transportation',
+    'hotel': 'accommodation',
+    'hostel': 'accommodation',
+    'airbnb': 'accommodation',
+    'lodge': 'accommodation',
+    'stay': 'accommodation',
+    'movie': 'entertainment',
+    'cinema': 'entertainment',
+    'game': 'entertainment',
+    'fun': 'entertainment',
+    'shop': 'shopping',
+    'buy': 'shopping',
+    'purchase': 'shopping',
+    'market': 'shopping',
+    'mall': 'shopping',
+    'grocery': 'groceries',
+    'vegetables': 'groceries',
+    'fruits': 'groceries',
+    'supermarket': 'groceries',
+    'medicine': 'healthcare',
+    'doctor': 'healthcare',
+    'hospital': 'healthcare',
+    'medical': 'healthcare',
+    'pharmacy': 'healthcare',
+    'book': 'education',
+    'course': 'education',
+    'study': 'education',
+    'school': 'education',
+    'college': 'education',
+    'trip': 'travel',
+    'vacation': 'travel',
+    'tour': 'travel',
+    'holiday': 'travel',
+    'gym': 'sports',
+    'fitness': 'sports',
+    'workout': 'sports',
+    'sport': 'sports',
+    'gift': 'gifts',
+    'present': 'gifts',
+    'birthday': 'gifts',
+    'electric': 'utilities',
+    'electricity': 'utilities',
+    'water': 'utilities',
+    'gas': 'utilities',
+    'internet': 'utilities',
+    'wifi': 'utilities',
+    'phone': 'utilities',
+    'mobile': 'utilities',
+    'other': 'others',
+    'misc': 'others',
+    'miscellaneous': 'others',
+    'general': 'others',
+  };
+  
+  // Check mappings
+  if (categoryMappings[input]) {
+    return categoryMappings[input];
+  }
+  
+  // Partial matches
+  for (const [key, value] of Object.entries(categoryMappings)) {
+    if (input.includes(key) || key.includes(input)) {
+      return value;
+    }
+  }
+  
+  // If no match found, return default category
+  return DEFAULT_CATEGORY;
+}
 
 export interface CSVExpense {
   date: string;
@@ -93,13 +246,15 @@ export function parseCSVExpenses(csvContent: string): CSVExpense[] {
         throw new Error(`Row ${index + 2}: Invalid amount "${record.Amount}"`);
       }
 
-      // Parse multiple payers (supports both old and new format)
-      // New format: "email1:amount1;email2:amount2" or old format: "email"
+      // Parse multiple payers (supports multiple formats)
+      // Format 1: "email1:amount1;email2:amount2" (colon separated email:amount)
+      // Format 2: "email1;amount1;email2;amount2" (semicolon separated alternating email/amount)
+      // Format 3: "email" (single email pays full amount)
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       let paidBy: { [email: string]: number } = {};
       
       if (record.PaidBy.includes(':')) {
-        // New format with amounts: "email1:amount1;email2:amount2"
+        // Format 1: "email1:amount1;email2:amount2"
         const payerDetails = record.PaidBy.split(';');
         let totalPaidAmount = 0;
         
@@ -122,12 +277,49 @@ export function parseCSVExpenses(csvContent: string): CSVExpense[] {
         if (Math.abs(totalPaidAmount - amount) > 0.01) {
           throw new Error(`Row ${index + 2}: Total paid amount (₹${totalPaidAmount}) doesn't match expense amount (₹${amount})`);
         }
-      } else {
-        // Old format: single payer pays full amount
-        if (!emailRegex.test(record.PaidBy)) {
-          throw new Error(`Row ${index + 2}: Invalid PaidBy email "${record.PaidBy}"`);
+      } else if (record.PaidBy.includes(';')) {
+        // Format 2: "email1;amount1;email2;amount2" (alternating email/amount pairs)
+        const parts = record.PaidBy.split(';').map((s: string) => s.trim());
+        let totalPaidAmount = 0;
+        
+        // Check if we have alternating email/amount pairs
+        if (parts.length % 2 === 0) {
+          for (let i = 0; i < parts.length; i += 2) {
+            const email = parts[i];
+            const amountStr = parts[i + 1];
+            
+            if (email && amountStr) {
+              if (!emailRegex.test(email)) {
+                throw new Error(`Row ${index + 2}: Invalid PaidBy email "${email}"`);
+              }
+              const paidAmount = parseFloat(amountStr.replace(/[₹,]/g, ''));
+              if (isNaN(paidAmount) || paidAmount <= 0) {
+                throw new Error(`Row ${index + 2}: Invalid paid amount "${amountStr}" for "${email}"`);
+              }
+              paidBy[email] = paidAmount;
+              totalPaidAmount += paidAmount;
+            }
+          }
+          
+          // Validate total paid amount matches expense amount
+          if (Math.abs(totalPaidAmount - amount) > 0.01) {
+            throw new Error(`Row ${index + 2}: Total paid amount (₹${totalPaidAmount}) doesn't match expense amount (₹${amount})`);
+          }
+        } else {
+          // If odd number of parts, treat as single email (first part)
+          const email = parts[0];
+          if (!emailRegex.test(email)) {
+            throw new Error(`Row ${index + 2}: Invalid PaidBy email "${email}"`);
+          }
+          paidBy[email.trim()] = amount;
         }
-        paidBy[record.PaidBy.trim()] = amount;
+      } else {
+        // Format 3: Single email pays full amount
+        const email = record.PaidBy.trim();
+        if (!emailRegex.test(email)) {
+          throw new Error(`Row ${index + 2}: Invalid PaidBy email "${email}"`);
+        }
+        paidBy[email] = amount;
       }
 
       // Parse split between (semicolon-separated for new format, comma-separated for backward compatibility)
@@ -190,8 +382,8 @@ export function parseCSVExpenses(csvContent: string): CSVExpense[] {
         splitType,
         splitBetween,
         splitDetails,
-        category: record.Category?.trim() || '',
-        paymentType: record.PaymentType?.trim() || '',
+        category: mapCategoryValue(record.Category || ''),
+        paymentType: mapPaymentTypeValue(record.PaymentType || ''),
         notes: record.Notes?.trim() || '',
       };
     });
@@ -238,10 +430,10 @@ export function convertCSVToFirestore(csvExpenses: CSVExpense[], currentUserEmai
       firestoreExpense.splitDetails = csvExpense.splitDetails;
     }
 
-    if (csvExpense.category && csvExpense.category.trim() !== '') {
-      firestoreExpense.category = csvExpense.category.trim();
-    }
+    // Always set category - if empty, mapCategoryValue will return DEFAULT_CATEGORY
+    firestoreExpense.category = csvExpense.category;
 
+    // Always set payment type if provided
     if (csvExpense.paymentType && csvExpense.paymentType.trim() !== '') {
       firestoreExpense.paymentType = csvExpense.paymentType.trim();
     }
